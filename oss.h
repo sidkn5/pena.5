@@ -21,9 +21,8 @@ typedef struct {
 	unsigned int milliseconds;		//shared memory clock
 	unsigned int nanoseconds;		//shared memory clock
 
+	int arrPid[maxChildren];
+
 	resources arrResources[maxResources];	//array of resource descriptor
-
-	
-
 
 }timeStruct;

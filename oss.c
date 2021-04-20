@@ -38,14 +38,16 @@ int totalChildrenCounter = 0;	//Maximum of 40 children then terminate
 //shared memory
 int shmid;
 int semid;
-int semResources;
+int semResources;			//semaphore, might use this later
 timeStruct* shmPtr;			//just this for now, needs a struct
 
 FILE* fp;
-char addToLogBuffer[200];
+char addToLogBuffer[200];	//buffer for logging
 int maxLines = 0;			//terminate when the file exceeds this number of lines
 int pids[MAXCHILDREN];
 int numOfUsers;				//number of Users forked
+
+//clock stuff
 long forkSec = 0;
 long forkNano = 0;
 int deadlockAlgoUsed = 0;
@@ -53,11 +55,11 @@ unsigned long nanoIncrement;
 unsigned long milliIncrement;
 
 
-int accessGranted = 0;
-int waited = 0;
-int numOfForks = 0;
-int terminated = 0;
-float deadlockPercentage = 0;
+int accessGranted = 0;			//access was granted immediately
+int waited = 0;					//the process waited before being granted access
+int numOfForks = 0;				//number of forks, cap 40
+int terminated = 0;				//killed by deadlock detection algo
+float deadlockPercentage = 0;	//percentage of deadlock detected
 
 //functions
 void cleanAll();
@@ -151,6 +153,7 @@ void logging(char* buffer) {
 
 }
 
+//initialize the values in shared memory
 void initSharedMemory() {
 	shmPtr->seconds = 0;
 	shmPtr->milliseconds = 0;
@@ -196,6 +199,7 @@ void initSharedMemory() {
 	}
 }
 
+//kill the child pid after the prog
 void killChildPids() {
 	int i;
 	for (i = 0; i < MAXCHILDREN; i++) {
@@ -220,8 +224,7 @@ void updateClock() {
 
 }
 
-
-//next fork nano
+//check the fork if it is time to fork
 void forkCheck() {
 	unsigned long nanoCheck = forkNano;
 	if (nanoCheck >= 1000000000) {
@@ -230,6 +233,8 @@ void forkCheck() {
 	}
 }
 
+
+//checks the clock
 void clockCheck() {
 	unsigned int nanoCheck = shmPtr->nanoseconds;
 	if (nanoCheck >= 1000000000) {
@@ -238,6 +243,8 @@ void clockCheck() {
 	}
 }
 
+
+//where the forking of the user proc happens
 void forking() {
 	int pid;
 	//numOfForks++;
@@ -353,6 +360,8 @@ int nextFork() {
 	return 0;
 }
 
+
+//deadlock detection algorithm, stallings book
 void deadlockDetection() {
 	int resourceHere;
 	for (int i = 0; i < MAXCHILDREN; i++) {
@@ -370,7 +379,6 @@ void deadlockDetection() {
 							shmPtr->arrResources[resourceHere].allocated[j] = 0;
 							shmPtr->arrResources[resourceHere].release[j] = 0;
 
-							//kill(shmPtr->childRunning[j], SIGKILL);
 							shmPtr->childRunning[j] = 0;
 							shmPtr->arrPid[j] = 1;
 							numOfUsers--;
@@ -398,7 +406,7 @@ void deadlockDetection() {
 	}
 }
 
-
+//reports stats at the end of the logfile
 void report() {
 	sprintf(addToLogBuffer, "\n\n END REPORT: \n\n");
 	logging(addToLogBuffer);
@@ -415,7 +423,7 @@ void report() {
 	logging(addToLogBuffer);
 	sprintf(addToLogBuffer, "\n\nVerbose OFF:\n");
 	logging(addToLogBuffer);
-	sprintf(addToLogBuffer, "OSS: DeadlockDetected: killing processes...\n");
+	sprintf(addToLogBuffer, "OSS: DeadlockDetected %d times: killing processes...\n", terminated);
 	logging(addToLogBuffer);
 	sprintf(addToLogBuffer, "Process killed by deadlock algorithm: %d\n", terminated);
 	logging(addToLogBuffer);
@@ -424,6 +432,7 @@ void report() {
 
 }
 
+//prints the allocation table at the end of the report
 void logAllocationTable() {
 	sprintf(addToLogBuffer, "\n\nResource Allocation Table\n");
 	logging(addToLogBuffer);
@@ -443,6 +452,7 @@ void logAllocationTable() {
 }
 
 
+//main driver
 int main(int argc, char *argv[]){
 
 	//signal handlers
@@ -508,7 +518,7 @@ int main(int argc, char *argv[]){
 	//init shared memory
 	initSharedMemory();
 	printf("Will terminate in 5 real world secs...\n");
-	alarm(timeTermination);
+	alarm(timeTermination);			//will terminate in 5 real world seconds
 
 	while (1) {
 

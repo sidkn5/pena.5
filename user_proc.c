@@ -32,11 +32,15 @@ derived from the examples given in the book.
 
 #include "oss.h"
 
+
+//shared memory
 int shmid;
 int semid;
 int semResources;
 int userPid;
 int currentIndex;
+
+//clock stuff
 unsigned int startTimeNs;
 unsigned int startTimeSec;
 unsigned int waitTimeNs;
@@ -51,6 +55,8 @@ int randomInstance;
 FILE* fp;
 timeStruct* shmPtr;
 
+
+//functions
 void cleanAll();
 void logging();
 void sem_wait(int);
@@ -63,7 +69,7 @@ void initStatus(int);
 void initResources(int);
 
 
-
+//initialized the stauts of the proc
 void initStatus(int ind) {
 	shmPtr->arrPid[ind] = 0;
 	shmPtr->waiting[ind] = 0;
@@ -71,6 +77,8 @@ void initStatus(int ind) {
 	shmPtr->wantedResources[ind] = -1;
 }
 
+
+//initializing the status of the resources
 void initResources(int ind) {
 	for (int i = 0; i < 20; i++) {
 		shmPtr->arrResources[i].allocated[ind] = 0;
@@ -80,6 +88,8 @@ void initResources(int ind) {
 	}
 }
 
+
+//checks the clock
 int checkTime() {
 	if (shmPtr->seconds > waitTimeSec) {
 		return 1;
@@ -92,6 +102,7 @@ int checkTime() {
 	return 0;
 }
 
+//cleans up everything
 void cleanAll() {
 	shmdt(shmPtr);
 	exit(0);
@@ -115,10 +126,12 @@ void sem_signal(int n) {
 	semop(semid, &sem, 1);
 }
 
+//logging to logfile.txt
 void logging(char* buffer) {
 	fputs(buffer, fp);
 }
 
+//looks for a free index in the array to use
 int freeIndex(int p) {
 	int i;
 	for (i = 0; i < MAXCHILDREN; i++) {
@@ -136,16 +149,15 @@ void initTime(int ind) {
 }
 
 
-
+//main driver
 int main() {
 
 	int resourceUsed;
 	userPid = getpid();
 
 	srand(userPid * 12);
-	//srand(time(NULL));
 
-	
+	//signal handlers
 	signal(SIGALRM, cleanAll);
 	signal(SIGINT, cleanAll);
 	signal(SIGKILL, cleanAll);
@@ -188,6 +200,7 @@ int main() {
 	initTime(currentIndex);
 	//init resources
 	initResources(currentIndex);
+
 	/*
 	int i;
 	int randNum;
@@ -239,7 +252,6 @@ int main() {
 				if (shmPtr->nanoseconds > startTimeNs) {
 					//can terminate early set status to 2, early temination
 					if ((rand() % (10-1) + 1) == 2) {
-						//printf("P%d is going to terminate early\n", currentIndex);
 						sem_wait(SEMRESOURCE);
 						shmPtr->arrPid[currentIndex] = 2;
 						sem_signal(SEMRESOURCE);
@@ -289,4 +301,6 @@ int main() {
 	}
 	cleanAll();
 	return 0;
+
+	//END OF MAIN
 }

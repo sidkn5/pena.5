@@ -1,3 +1,22 @@
+/*
+Student: Sean Dela Pena
+Professor: Dr. Sanjiv Bhatia
+Assignment 5: The goal of this homework is to learn about resource management inside an operating system.
+You will work on the specified strategy to manage resources and take care of any possible
+starvation/deadlock issues
+Date: 4/20/2021
+
+github: github.com/sidkn5
+*/
+
+/*
+SOURCES:
+
+Please note the the algorithms used in this program are from the stallings book. The semaphores are also
+derived from the examples given in the book.
+
+*/
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <signal.h>

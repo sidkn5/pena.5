@@ -60,14 +60,90 @@ void initTime();
 int checkTime();
 void getIndex();
 void initStatus(int);
+void initResources(int);
+
+
+
+void initStatus(int ind) {
+	shmPtr->arrPid[ind] = 0;
+	shmPtr->waiting[ind] = 0;
+	shmPtr->sleep[ind] = 0;
+	shmPtr->wantedResources[ind] = -1;
+}
+
+void initResources(int ind) {
+	for (int i = 0; i < 20; i++) {
+		shmPtr->arrResources[i].allocated[ind] = 0;
+		shmPtr->arrResources[i].request[ind] = 0;
+		shmPtr->arrResources[i].release[ind] = 0;
+
+	}
+}
+
+int checkTime() {
+	if (shmPtr->seconds > waitTimeSec) {
+		return 1;
+	}
+	else if (shmPtr->seconds == waitTimeSec) {
+		if (shmPtr->nanoseconds > waitTimeNs) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+void cleanAll() {
+	shmdt(shmPtr);
+	exit(0);
+}
+
+//sem_wait function for the semaphore
+void sem_wait(int n) {
+	struct sembuf semaphore;
+	semaphore.sem_op = -1;
+	semaphore.sem_num = 0;
+	semaphore.sem_flg = 0;
+	semop(semid, &semaphore, 1);
+}
+
+//semaphore signal function, increment sem
+void sem_signal(int n) {
+	struct sembuf sem;
+	sem.sem_op = 1;
+	sem.sem_num = 0;
+	sem.sem_flg = 0;
+	semop(semid, &sem, 1);
+}
+
+void logging(char* buffer) {
+	fputs(buffer, fp);
+}
+
+int freeIndex(int p) {
+	int i;
+	for (i = 0; i < MAXCHILDREN; i++) {
+		if (p == shmPtr->childRunning[i]) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+//init cpu and wait time
+void initTime(int ind) {
+	shmPtr->cpuTime[ind] = 0;
+	shmPtr->childWaitTime[ind] = 0;
+}
+
+
 
 int main() {
 
 	int resourceUsed;
 	userPid = getpid();
 
-	//srand(userPid * 12);
-	srand(time(NULL));
+	srand(userPid * 12);
+	//srand(time(NULL));
 
 	
 	signal(SIGALRM, cleanAll);
@@ -110,7 +186,8 @@ int main() {
 	initStatus(currentIndex);
 	//init cpu time and wait time
 	initTime(currentIndex);
-
+	//init resources
+	initResources(currentIndex);
 	/*
 	int i;
 	int randNum;
@@ -144,7 +221,7 @@ int main() {
 
 	int tempTimeMs;
 
-	while (1) {
+	while (shmPtr->arrPid[currentIndex] != 1) {
 
 		//wait here until the time is over
 		while (1) {
@@ -161,12 +238,11 @@ int main() {
 			if (shmPtr->seconds - startTimeSec > 1) {
 				if (shmPtr->nanoseconds > startTimeNs) {
 					//can terminate early set status to 2, early temination
-					if ((rand() % 20) % 2 == 0) {
+					if ((rand() % (10-1) + 1) == 2) {
 						//printf("P%d is going to terminate early\n", currentIndex);
 						sem_wait(SEMRESOURCE);
 						shmPtr->arrPid[currentIndex] = 2;
 						sem_signal(SEMRESOURCE);
-						cleanAll();
 						break;
 					}
 				}
@@ -178,7 +254,6 @@ int main() {
 			sem_wait(SEMRESOURCE);
 			if (shmPtr->arrResources[randomResource].allocated[currentIndex] > 0) {
 				if (rand() % 11 > 5) {
-					printf("P%d is requesting to release R%d... \n", currentIndex, randomResource);
 					shmPtr->arrResources[randomResource].release[currentIndex] = shmPtr->arrResources[randomResource].allocated[currentIndex];
 					shmPtr->waiting[currentIndex] = true;
 				}
@@ -188,7 +263,6 @@ int main() {
 					if (rand() % 11 > 5) {
 						randomInstance = 1 + (rand() % shmPtr->arrResources[randomResource].instances);
 						if (randomInstance > 0) {
-							printf("P%d is requesting to get R%d (%d instances)\n", currentIndex, randomResource, randomInstance);
 							shmPtr->arrResources[randomResource].request[currentIndex] = randomInstance;
 							shmPtr->waiting[currentIndex] = true;
 						}
@@ -213,66 +287,6 @@ int main() {
 			sem_signal(SEMCLOCK);
 		}
 	}
+	cleanAll();
 	return 0;
 }
-
-void initStatus(int ind) {
-	shmPtr->arrPid[ind] = 0;
-	shmPtr->waiting[ind] = 0;
-	shmPtr->sleep[ind] = 0;
-}
-
-
-int checkTime() {
-	if (shmPtr->seconds > waitTimeSec) {
-		return 1;
-	}
-	else if(shmPtr->nanoseconds > waitTimeNs) {
-		return 1;
-	}
-	return 0;
-}
-
-void cleanAll() {
-	shmdt(shmPtr);
-	exit(0);
-}
-
-//sem_wait function for the semaphore
-void sem_wait(int n) {
-	struct sembuf semaphore;
-	semaphore.sem_op = -1;
-	semaphore.sem_num = 0;
-	semaphore.sem_flg = 0;
-	semop(semid, &semaphore, 1);
-}
-
-//semaphore signal function, increment sem
-void sem_signal(int n) {
-	struct sembuf sem;
-	sem.sem_op = 1;
-	sem.sem_num = 0;
-	sem.sem_flg = 0;
-	semop(semid, &sem, 1);
-}
-
-void logging(char* buffer) {
-	fputs(buffer, fp);
-}
-
-int freeIndex(int p) {
-	int i;
-	for (i = 0; i < 19; i++) {
-		if (p == shmPtr->childRunning[i]) {
-			return i;
-		}
-	}
-	return -1;
-}
-
-//init cpu and wait time
-void initTime(int ind) {
-	shmPtr->cpuTime[ind] = 0;
-	shmPtr->childWaitTime[ind] = 0;
-}
-

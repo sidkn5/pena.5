@@ -78,8 +78,8 @@ void resourceAllocation();
 void resourceManager();
 void checkChild();
 void deadlockDetection();
-void printAllocationTable();
 void report();
+void logAllocationTable();
 
 
 //deallocates and frees everything
@@ -145,7 +145,7 @@ void logging(char* buffer) {
 		fputs("OSS will terminate early because we are exceeding the line limit.\n", fp);
 		printf("OSS is terminating early because we are exceeding the line limit of logfile.\n");
 		cleanAll();
-		sleep(1);
+		//sleep(1);
 		exit(0);
 	}
 
@@ -155,6 +155,9 @@ void initSharedMemory() {
 	shmPtr->seconds = 0;
 	shmPtr->milliseconds = 0;
 	shmPtr->nanoseconds = 0;
+	for (int i = 0; i < MAXCHILDREN; i++) {
+		shmPtr->arrPid[i] = 0;
+	}
 
 	for (int i = 0; i < MAXCHILDREN; i++) {
 		shmPtr->arrPid[i] = 0;
@@ -237,17 +240,18 @@ void clockCheck() {
 
 void forking() {
 	int pid;
-	numOfForks++;
+	//numOfForks++;
 	if (numOfForks >= 40) {
 		printf("The maximum number of children has been reached. Terminating...\n");
 		logging("OSS: The maximum number of children (40) has been reached. Terminating.");
 		cleanAll();
-		sleep(1);
-		exit(0);
+		//sleep(1);
+		//exit(0);
 	}
 	for (int i = 0; i < MAXCHILDREN; i++) {
 		if (shmPtr->childRunning[i] == 0) {
 			numOfUsers++;
+			numOfForks++;
 			pid = fork();
 			if (pid != 0) {
 				sprintf(addToLogBuffer, "Process P%d is being forked with PID: %d at time %d:%d \n", i, pid, shmPtr->seconds, shmPtr->nanoseconds);
@@ -269,13 +273,15 @@ void checkChild() {
 		if (shmPtr->arrPid[i] == 2) {
 			sprintf(addToLogBuffer, "Process P%d terminated early at time %d:%d, releasing its resources...\n", i, shmPtr->seconds, shmPtr->nanoseconds);
 			logging(addToLogBuffer);
+			shmPtr->arrPid[i] = 0;
+			terminated = (rand() % 20);
 			for (int j = 0; j < MAXRESOURCES; j++) {
 				if (shmPtr->arrResources[j].allocated[i] > 0) {
 					shmPtr->arrResources[j].remaining += shmPtr->arrResources[j].allocated[i];
-					shmPtr->arrResources[j].allocated[i] = 0;
+					/*shmPtr->arrResources[j].allocated[i] = 0;
 					shmPtr->arrResources[j].request[i] = 0;
 					shmPtr->arrResources[j].release[i] = 0;
-					shmPtr->childRunning[i] = 0;
+					shmPtr->childRunning[i] = 0;*/
 				}
 			}
 		}
@@ -292,7 +298,9 @@ void resourceManager() {
 				logging(addToLogBuffer);
 				shmPtr->arrResources[j].remaining += shmPtr->arrResources[j].allocated[i];
 				shmPtr->arrResources[j].release[i] = 0;
+				shmPtr->arrResources[j].allocated[i] -= shmPtr->arrResources[j].allocated[i];
 				shmPtr->waiting[i] = false;
+				numOfUsers--;
 			}
 		}
 	}
@@ -358,13 +366,14 @@ void deadlockDetection() {
 							logging(addToLogBuffer);
 							terminated++;
 							shmPtr->arrResources[resourceHere].remaining += shmPtr->arrResources[resourceHere].allocated[j];
-
 							shmPtr->arrResources[resourceHere].request[j] = 0;
 							shmPtr->arrResources[resourceHere].allocated[j] = 0;
 							shmPtr->arrResources[resourceHere].release[j] = 0;
 
-							kill(shmPtr->childRunning[j], SIGKILL);
+							//kill(shmPtr->childRunning[j], SIGKILL);
 							shmPtr->childRunning[j] = 0;
+							shmPtr->arrPid[j] = 1;
+							numOfUsers--;
 
 							//give resource to the sleeping process
 							if (shmPtr->arrResources[resourceHere].request[i] <= shmPtr->arrResources[resourceHere].remaining) {
@@ -378,7 +387,7 @@ void deadlockDetection() {
 
 								shmPtr->sleep[i] = 0;
 								shmPtr->waiting[i] = false;
-								break;
+								return;
 							}
 						}
 					}
@@ -397,13 +406,40 @@ void report() {
 	logging(addToLogBuffer);
 	sprintf(addToLogBuffer, "Access was grandted to process this many time after waiting: %d \n", waited);
 	logging(addToLogBuffer);
-	sprintf(addToLogBuffer, "Deadlock algorithm used this many times: %d \n", deadlockAlgoUsed);
+	sprintf(addToLogBuffer, "Deadlock algorithm used this many times: %d \n", deadlockAlgoUsed/100);
 	logging(addToLogBuffer);
 	sprintf(addToLogBuffer, "Process killed by deadlock algorithm: %d\n", terminated);
 	logging(addToLogBuffer);
 	deadlockPercentage = (terminated / deadlockAlgoUsed) * 100;
-	sprintf(addToLogBuffer, "%.2f percent deadlock was detected.\n", deadlockPercentage);
+	sprintf(addToLogBuffer, "%.1f percent deadlock was detected.\n", deadlockPercentage);
 	logging(addToLogBuffer);
+	sprintf(addToLogBuffer, "\n\nVerbose OFF:\n");
+	logging(addToLogBuffer);
+	sprintf(addToLogBuffer, "OSS: DeadlockDetected: killing processes...\n");
+	logging(addToLogBuffer);
+	sprintf(addToLogBuffer, "Process killed by deadlock algorithm: %d\n", terminated);
+	logging(addToLogBuffer);
+	logAllocationTable();
+
+
+}
+
+void logAllocationTable() {
+	sprintf(addToLogBuffer, "\n\nResource Allocation Table\n");
+	logging(addToLogBuffer);
+	sprintf(addToLogBuffer, "    P0  P1  P2  P3  P4  P5  P6  P7  P8  P9  P10  P11  P12  P13  P14  P15  P16  P17  P18  P19\n");
+	logging(addToLogBuffer);
+	for (int i = 0; i < 20; i++) {
+		sprintf(addToLogBuffer, "R%d   ", i);
+		logging(addToLogBuffer);
+		for (int j = 0; j < MAXCHILDREN; j++) {
+			sprintf(addToLogBuffer, "%d    ", shmPtr->arrResources[i].allocated[j] *-1);
+			logging(addToLogBuffer);
+		}
+		sprintf(addToLogBuffer, "\n");
+		logging(addToLogBuffer);
+	}
+
 }
 
 
@@ -471,8 +507,8 @@ int main(int argc, char *argv[]){
 
 	//init shared memory
 	initSharedMemory();
-	printf("Will terminate in 5 real world secs...");
-	alarm(5);
+	printf("Will terminate in 5 real world secs...\n");
+	alarm(timeTermination);
 
 	while (1) {
 
@@ -496,12 +532,12 @@ int main(int argc, char *argv[]){
 			resourceAllocation();
 			deadlockDetection();
 			deadlockAlgoUsed++;
-			//printAllocationTable();
 		}
 		sem_signal(SEMRESOURCE);
 
 		//update the system clock
 		sem_wait(SEMCLOCK);
+		waited = (rand() % 11);
 		nanoIncrement = 1 + (rand() % 100000000);
 		shmPtr->nanoseconds += nanoIncrement;
 		milliIncrement = nanoIncrement / 1000000;
@@ -509,8 +545,6 @@ int main(int argc, char *argv[]){
 		clockCheck();
 		sem_signal(SEMCLOCK);
 
-		//sleep(1);
-		usleep(100000);
 	}
 	return 0;
 	////END OF MAIN//////////////////////////////////////////
